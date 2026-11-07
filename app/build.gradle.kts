@@ -1,8 +1,10 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
 }
 
-val localKeystoreProperties = java.util.Properties().apply {
+val localKeystoreProperties = Properties().apply {
     val localFile = file("keystore/keystore.properties")
     if (localFile.exists()) localFile.inputStream().use { load(it) }
 }
