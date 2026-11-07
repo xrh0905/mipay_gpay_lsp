@@ -10,7 +10,6 @@ on:
 
 env:
   JAVA_VERSION: "17"
-  XPOSED_API_URL: "https://maven.aliyun.com/repository/public/de/robv/android/xposed/api/82/api-82.jar"
 
 jobs:
   build:
@@ -35,14 +34,7 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4.0.4
         with:
-          packages: "platform-tools platforms;android-34 build-tools;34.0.0"
-
-      - name: Download Xposed API JAR
-        run: |
-          mkdir -p app/libs
-          curl -fsSL "${{ env.XPOSED_API_URL }}" -o app/libs/xposed-api.jar
-          echo "Downloaded: $(wc -c < app/libs/xposed-api.jar) bytes"
-          unzip -t app/libs/xposed-api.jar > /dev/null 2>&1 && echo "JAR valid" || { echo "JAR invalid"; exit 1; }
+          packages: "platform-tools platforms;android-37.0 build-tools;37.0.0"
 
       - name: Create keystore from secret
         env:
@@ -94,18 +86,20 @@ jobs:
             ## MiPay GPay LSPosed 模块 ${{ github.ref_name }}
 
             ### 更新内容
-            详见 [Commits](https://github.com/${{ github.repository }}/commits/${{ github.ref_name }})
+            - 迁移到 LSPosed 现代 API 102（静态作用域，仅 `com.miui.tsmclient`）
+            - 移除 system_server 的 `dismissKeyguard` Hook；Wallet 需要解锁时走系统正常解锁流程
+            - 移除 Root 命令调用，直接 `startActivity` 打开 Wallet 快捷刷卡页
 
             ### 安装说明
             1. 下载下方 `mipay_gpay_lsp_*.apk`
-            2. 在 LSPosed Manager 中启用模块
-            3. 勾选作用域：`小米智能卡`（`com.miui.tsmclient`）和 `System Framework`（`android`）
-            4. 强制停止并重启小米智能卡
+            2. 在 LSPosed Manager 中启用模块（作用域由模块静态声明，仅 `小米智能卡` / `com.miui.tsmclient`）
+            3. 强制停止并重启小米智能卡
 
             ### 系统要求
-            - LSPosed 框架
+            - LSPosed（支持 libxposed API 102）
             - Android 12+ (API 30+)
             - 已安装 Google Wallet
+            - 无需 Root 授权
 
             ### 校验信息
             - **构建时间**: ${{ github.event.head_commit.timestamp }}

@@ -1,6 +1,5 @@
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
 }
 
 val keystorePath = System.getenv("KEYSTORE_FILE") ?: "keystore/mipay.jks"
@@ -11,14 +10,14 @@ val hasSigningConfig = keystorePassword.isNotEmpty() && file(keystorePath).exist
 
 android {
     namespace = "com.mipay.gpay.lsp"
-    compileSdk = 34
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.mipay.gpay.lsp"
         minSdk = 30
-        targetSdk = 34
-        versionCode = 3
-        versionName = "1.2"
+        targetSdk = 37
+        versionCode = 4
+        versionName = "1.3"
     }
 
     signingConfigs {
@@ -47,12 +46,14 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
+    packaging {
+        resources {
+            merges += "META-INF/xposed/*"
+        }
     }
 }
 
 dependencies {
     implementation("com.caverock:androidsvg-aar:1.4")
-    compileOnly(files("libs/xposed-api.jar"))
+    compileOnly("io.github.libxposed:api:102.0.0")
 }

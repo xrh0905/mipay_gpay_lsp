@@ -1,45 +1,33 @@
 package com.mipay.gpay.lsp
 
-import de.robv.android.xposed.IXposedHookLoadPackage
-import de.robv.android.xposed.XposedBridge
-import de.robv.android.xposed.callbacks.XC_LoadPackage
-import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import io.github.libxposed.api.XposedModule
+import io.github.libxposed.api.XposedModuleInterface.ModuleLoadedParam
+import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam
 
 /**
- * LSPosed 模块入口 — XposedInit 是 xposed_init 中声明的入口类
+ * libxposed API 102 entry point, declared in META-INF/xposed/java_init.list.
  */
-class XposedInit : IXposedHookLoadPackage {
+class XposedInit : XposedModule() {
 
-    companion object {
-        const val TAG = "MiPayGPayLSP"
-        const val LOG_FILE = "/sdcard/Documents/gpay_lsp.log"
-
-        fun logToFile(msg: String) {
-            try {
-                val logFile = File(LOG_FILE)
-                val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault()).format(Date())
-                logFile.appendText("$timestamp [XposedInit] $msg\n")
-            } catch (e: Throwable) {
-                XposedBridge.log("$TAG: logToFile failed: ${e.message}")
-            }
-        }
+    override fun onModuleLoaded(param: ModuleLoadedParam) {
+        DevLog.attach(this)
+        DevLog.i(
+            "onModuleLoaded: process=${param.processName} " +
+                "framework=$frameworkName($frameworkVersionCode) api=$apiVersion"
+        )
     }
 
-    override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
-        logToFile("=".repeat(50))
-        logToFile("handleLoadPackage: ${lpparam.packageName}")
-        XposedBridge.log("$TAG: XposedInit received package: ${lpparam.packageName}")
+    override fun onPackageReady(param: PackageReadyParam) {
+        if (param.packageName != MainHook.MIPAY_PKG) {
+            DevLog.i("onPackageReady ignored package=${param.packageName}")
+            return
+        }
 
-        // 委托给 MainHook 处理所有 Hook 逻辑
+        DevLog.i("onPackageReady: ${param.packageName}")
         try {
-            MainHook().handleLoadPackage(lpparam)
-            logToFile("MainHook.handleLoadPackage completed for ${lpparam.packageName}")
-        } catch (e: Throwable) {
-            logToFile("ERROR in MainHook: ${e.message}")
-            logToFile(e.stackTraceToString())
+            MainHook(this).install(param.classLoader)
+        } catch (t: Throwable) {
+            DevLog.e("MainHook install failed", t)
         }
     }
 }

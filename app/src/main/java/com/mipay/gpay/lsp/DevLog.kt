@@ -1,19 +1,28 @@
 package com.mipay.gpay.lsp
 
-import de.robv.android.xposed.XposedBridge
+import android.util.Log
+import io.github.libxposed.api.XposedModule
 
+/**
+ * Thin wrapper over [XposedModule.log] so hook code does not need to carry the module instance.
+ */
 object DevLog {
-    const val TAG = "MPG-DEV"
+    private const val TAG = "MiPayGPayLSP"
+
+    @Volatile
+    private var logger: XposedModule? = null
+
+    fun attach(module: XposedModule) {
+        logger = module
+    }
 
     fun i(message: String) {
-        XposedBridge.log("$TAG: $message")
+        val module = logger
+        if (module != null) module.log(Log.INFO, TAG, message) else Log.i(TAG, message)
     }
 
     fun e(message: String, throwable: Throwable? = null) {
-        XposedBridge.log("$TAG ERROR: $message")
-        throwable?.let {
-            XposedBridge.log("$TAG ERROR: ${it.javaClass.name}: ${it.message}")
-            XposedBridge.log("$TAG ERROR STACK:\n${it.stackTraceToString()}")
-        }
+        val module = logger
+        if (module != null) module.log(Log.ERROR, TAG, message, throwable) else Log.e(TAG, message, throwable)
     }
 }

@@ -11,16 +11,16 @@
 
 - **无缝集成**：Hook 小米智能卡 `DoubleClickActivity`，在刷卡页面右下角显示 Google Pay 药丸按钮
 - **Material Design 3**：自适应系统 Monet 主题色，与系统风格完美融合
-- **一键跳转**：点击按钮直接打开 Google Wallet 刷卡界面，锁屏下也能直接显示
+- **一键跳转**：点击按钮直接打开 Google Wallet 刷卡界面
 - **轻量可靠**：仅注入必要代码，不影响 MiPay 原有功能
 
 ## 📱 系统要求
 
 | 项目 | 要求 |
 |------|------|
-| 框架 | [LSPosed](https://github.com/LSPosed/LSPosed) |
+| 框架 | [LSPosed](https://github.com/LSPosed/LSPosed)（支持 libxposed API 102） |
+| 模块 API | libxposed API 102（静态作用域） |
 | Android | 12+ (API 30+) |
-| Root | Magisk / KernelSU（锁屏跳转需要） |
 | 目标应用 | 小米智能卡 (`com.miui.tsmclient`) |
 | 依赖应用 | Google Wallet (`com.google.android.apps.walletnfcrel`) |
 
@@ -28,10 +28,9 @@
 
 1. **下载 APK**：从 [Releases](https://github.com/MasterOfStar/mipay_gpay_lsp/releases) 下载最新版本
 2. **安装模块**：在 LSPosed Manager 中安装并启用模块
-3. **选择目标**：勾选作用域 → `小米智能卡` (`com.miui.tsmclient`) 和 `System Framework` (`android`)
-4. **授予 Root**：打开模块界面，允许模块获取 Root 权限
-5. **重启应用**：强制停止并重新打开小米智能卡
-6. **开始使用**：刷卡时右下角会出现 Google Pay 按钮，点击即可跳转
+3. **作用域**：模块已静态声明仅作用于 `小米智能卡` (`com.miui.tsmclient`)，无需手动添加 `System Framework`
+4. **重启应用**：强制停止并重新打开小米智能卡
+5. **开始使用**：刷卡时右下角会出现 Google Pay 按钮，点击即可跳转
 
 ## 🖼️ 效果预览
 
@@ -69,10 +68,12 @@ app/build/outputs/apk/release/app-release.apk
 
 ## 📋 技术细节
 
-- **Hook 目标**：`com.miui.tsmclient.ui.card.DoubleClickActivity`
+- **模块 API**：libxposed API 102，入口 `META-INF/xposed/java_init.list`，静态作用域 `META-INF/xposed/scope.list`
+- **Hook 目标**：`com.miui.tsmclient.ui.quick.DoubleClickActivity`
 - **注入方式**：动态添加 FrameLayout + ImageButton
 - **SVG 渲染**：使用 [AndroidSVG](https://github.com/BigBadaboom/androidsvg) 渲染 Google Pay Logo
 - **主题适配**：读取系统 `system_accent1_100` 色值实现 Monet 动态着色
+- **跳转方式**：直接 `startActivity` 打开 Wallet 快捷刷卡页，无需 Root
 
 ## 🤝 贡献
 

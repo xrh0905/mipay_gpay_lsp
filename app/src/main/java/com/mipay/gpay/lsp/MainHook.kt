@@ -9,11 +9,9 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
-import android.net.Uri
 import android.nfc.NfcAdapter
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
+import android.os.Bundle
 import android.util.AttributeSet
 import android.view.View
 import android.view.ViewGroup
@@ -21,20 +19,16 @@ import android.widget.FrameLayout
 import android.widget.Toast
 import com.caverock.androidsvg.SVG
 import com.caverock.androidsvg.SVGParseException
-import de.robv.android.xposed.IXposedHookLoadPackage
-import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XposedBridge
-import de.robv.android.xposed.XposedHelpers
-import de.robv.android.xposed.callbacks.XC_LoadPackage
+import io.github.libxposed.api.XposedModule
 
-class MainHook : IXposedHookLoadPackage {
+class MainHook(private val module: XposedModule) {
 
     companion object {
         const val MIPAY_PKG = "com.miui.tsmclient"
         const val WALLET_PKG = "com.google.android.apps.walletnfcrel"
-        private const val TAG = "MiPayGPay"
+        private const val TARGET_ACTIVITY = "com.miui.tsmclient.ui.quick.DoubleClickActivity"
         private const val INJECT_TAG = "mipay_gpay_btn"
-        
+
         // NFC 设置 Key
         private const val KEY_NFC_PAYMENT = "nfc_payment_default_component"
         // Google Wallet NFC 组件 (GmsCore)
@@ -59,44 +53,19 @@ class MainHook : IXposedHookLoadPackage {
   <path fill="#EA4335" d="M13.2,9.4c1.9,0,3.7,0.7,5.1,2l0,0l3.8-3.8c-2.4-2.2-5.6-3.5-8.8-3.4c-5,0-9.6,2.8-11.8,7.3l4.4,3.4C6.8,11.7,9.8,9.4,13.2,9.4z"/>
 </svg>"""
 
-        fun log(msg: String) {
-            DevLog.i(msg)
+        fun log(message: String) {
+            DevLog.i(message)
         }
 
         @JvmStatic
         fun launchWalletQuickDraw(context: Context) {
-            Thread {
-                log("ROOT provider request")
-                val result = runCatching {
-                    context.contentResolver.call(
-                        Uri.parse("content://${RootCommandProvider.AUTHORITY}"),
-                        RootCommandProvider.METHOD_LAUNCH_WALLET,
-                        null,
-                        null
-                    )
-                }.getOrNull()
-
-                val output = result?.getString(RootCommandProvider.KEY_OUTPUT)
-                if (result?.getBoolean(RootCommandProvider.KEY_SUCCESS) == true) {
-                    log("ROOT provider success output=$output")
-                    return@Thread
-                }
-
-                log("ROOT provider failed output=${output ?: "provider unavailable"}; fallback direct")
-                Handler(Looper.getMainLooper()).post {
-                    launchWalletQuickDrawDirect(context)
-                }
-            }.start()
-        }
-
-        private fun launchWalletQuickDrawDirect(context: Context) {
-            log("ROOT fallback direct startActivity")
             try {
                 context.startActivity(Intent(WALLET_QUICKDRAW_ACTION).apply {
                     component = ComponentName(WALLET_PKG, WALLET_QUICKDRAW_ACTIVITY)
                     flags = WALLET_QUICKDRAW_FLAGS
                 })
-            } catch (e: Throwable) {
+            } catch (t: Throwable) {
+                log("launchWalletQuickDraw failed: ${t.message}")
                 Toast.makeText(context, "未安装 Google Wallet", Toast.LENGTH_SHORT).show()
             }
         }
@@ -116,14 +85,14 @@ class MainHook : IXposedHookLoadPackage {
                 )
                 val result = method.invoke(null, cr, KEY_NFC_PAYMENT, component, -2) as Boolean
                 log("setNfcComponent: $component, result=$result")
-                
+
                 // 主动触发 NFC 刷新
                 refreshNfcService(context)
-            } catch (e: Exception) {
-                log("setNfcComponent failed: ${e.message}")
+            } catch (t: Throwable) {
+                log("setNfcComponent failed: ${t.message}")
             }
         }
-        
+
         // 触发 NFC 服务刷新
         @JvmStatic
         private fun refreshNfcService(context: Context) {
@@ -144,57 +113,40 @@ class MainHook : IXposedHookLoadPackage {
                         }
                     }
                 }
-            } catch (e: Exception) {
-                log("refreshNfcService failed: ${e.message}")
+            } catch (t: Throwable) {
+                log("refreshNfcService failed: ${t.message}")
             }
         }
     }
 
-    override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
-        DevLog.i("LOAD package=${lpparam.packageName}")
-        when (lpparam.packageName) {
-            MIPAY_PKG -> setupMiPayHooks(lpparam)
-            "android" -> SystemServerQuickDrawHooks.install(lpparam.classLoader)
-            else -> DevLog.i("LOAD ignored package=${lpparam.packageName}")
-        }
-    }
-
-    private fun setupMiPayHooks(lpparam: XC_LoadPackage.LoadPackageParam) {
+    fun install(classLoader: ClassLoader) {
         try {
             log("MIPAY installing DoubleClickActivity hooks")
-            // Hook DoubleClickActivity 的 onCreate - 最早时机
-            val targetClass = XposedHelpers.findClass(
-                "com.miui.tsmclient.ui.quick.DoubleClickActivity", lpparam.classLoader
-            )
-            log("MIPAY DoubleClickActivity found")
-            
-            // onCreate: 最早设置 NFC (before 比 after 更早)
-            XposedHelpers.findAndHookMethod(targetClass, "onCreate", android.os.Bundle::class.java, object : XC_MethodHook() {
-                override fun beforeHookedMethod(param: MethodHookParam) {
-                    val activity = param.thisObject as Activity
-                    log("DoubleClickActivity.onCreate (before) - 设置 NFC = MiPay")
-                    setNfcComponent(activity, MIPAY_COMPONENT)
-                }
-            })
-            
-            // onResume: 再次确认 + 注入按钮
-            XposedHelpers.findAndHookMethod(targetClass, "onResume", object : XC_MethodHook() {
-                override fun beforeHookedMethod(param: MethodHookParam) {
-                    val activity = param.thisObject as Activity
-                    log("DoubleClickActivity.onResume - 确认 NFC = MiPay")
-                    setNfcComponent(activity, MIPAY_COMPONENT)
-                    injectButton(activity)
-                }
-            })
-            log("MIPAY DoubleClickActivity hooks installed")
-            
-        } catch (e: Throwable) {
-            log("MiPay hook failed: ${e.message}")
-        }
-    }
+            val targetClass = Class.forName(TARGET_ACTIVITY, false, classLoader)
 
-    private fun setNfcComponent(context: Context, component: String) {
-        setNfcComponentStatic(context, component)
+            // onCreate: 在原始逻辑之前设置 NFC = MiPay
+            val onCreate = targetClass.getDeclaredMethod("onCreate", Bundle::class.java)
+            module.hook(onCreate).intercept { chain ->
+                val activity = chain.thisObject as Activity
+                log("DoubleClickActivity.onCreate - 设置 NFC = MiPay")
+                setNfcComponentStatic(activity, MIPAY_COMPONENT)
+                chain.proceed()
+            }
+
+            // onResume: 再次确认 NFC = MiPay，并注入按钮
+            val onResume = targetClass.getDeclaredMethod("onResume")
+            module.hook(onResume).intercept { chain ->
+                val activity = chain.thisObject as Activity
+                log("DoubleClickActivity.onResume - 确认 NFC = MiPay")
+                setNfcComponentStatic(activity, MIPAY_COMPONENT)
+                injectButton(activity)
+                chain.proceed()
+            }
+
+            log("MIPAY DoubleClickActivity hooks installed")
+        } catch (t: Throwable) {
+            DevLog.e("MiPay hook failed", t)
+        }
     }
 
     private fun injectButton(activity: Activity) {
@@ -255,7 +207,7 @@ class GooglePayButtonView @JvmOverloads constructor(
                 MainHook.log("BUTTON click: set NFC = WALLET")
                 MainHook.setNfcComponentStatic(context, MainHook.WALLET_COMPONENT)
                 MainHook.launchWalletQuickDraw(context)
-            } catch (e: Throwable) {
+            } catch (t: Throwable) {
                 Toast.makeText(context, "未安装 Google Wallet", Toast.LENGTH_SHORT).show()
             }
         }
