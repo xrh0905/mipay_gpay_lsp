@@ -7,6 +7,15 @@
 > LSPosed 模块：在小米智能卡（MiPay）刷卡页面注入 Google Pay 快捷按钮，一键跳转 Google Wallet。
 > 本项目全部代码工作由Vibe-coding完成
 
+## 🧭 设计理念
+
+> Minimal scope, modern standard, maximum hybrid flavor — seamless and standardized.
+
+- **最小作用域（Minimal scope）**：静态作用域仅 `com.miui.tsmclient`，不 Hook `system_server`，不请求 Root
+- **现代标准（Modern standard）**：libxposed API 102 + `META-INF/xposed` 静态声明，不再使用遗留 XposedBridge API
+- **最大程度保留混合体验（Maximum hybrid flavor）**：不接管、不替换 MiPay 原有刷卡流程，只在原页面叠加 Google Wallet 入口
+- **无缝、标准化（Seamless & standardized）**：直接 `startActivity` 打开 Wallet QUICKDRAW，遵循 Android 标准组件与生命周期
+
 ## ✨ 功能特性
 
 - **无缝集成**：Hook 小米智能卡 `DoubleClickActivity`，在刷卡页面右下角显示 Google Pay 药丸按钮
