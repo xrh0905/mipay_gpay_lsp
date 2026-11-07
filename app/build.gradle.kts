@@ -2,10 +2,23 @@ plugins {
     id("com.android.application")
 }
 
-val keystorePath = System.getenv("KEYSTORE_FILE") ?: "keystore/mipay.jks"
-val keystorePassword = System.getenv("KEYSTORE_PASS").orEmpty()
-val keyAliasName = System.getenv("KEYSTORE_ALIAS") ?: "mipaygpay"
-val signingKeyPassword = System.getenv("KEY_PASS").takeUnless { it.isNullOrBlank() } ?: keystorePassword
+val localKeystoreProperties = java.util.Properties().apply {
+    val localFile = file("keystore/keystore.properties")
+    if (localFile.exists()) localFile.inputStream().use { load(it) }
+}
+
+val keystorePath = System.getenv("KEYSTORE_FILE")
+    ?: localKeystoreProperties.getProperty("storeFile")
+    ?: "keystore/mipay.jks"
+val keystorePassword = System.getenv("KEYSTORE_PASS")
+    ?: localKeystoreProperties.getProperty("storePassword").orEmpty()
+val keyAliasName = System.getenv("KEYSTORE_ALIAS")
+    ?: localKeystoreProperties.getProperty("keyAlias")
+    ?: "mipaygpay"
+val signingKeyPassword = System.getenv("KEY_PASS")
+    ?.takeUnless { it.isNullOrBlank() }
+    ?: localKeystoreProperties.getProperty("keyPassword")
+    ?: keystorePassword
 val hasSigningConfig = keystorePassword.isNotEmpty() && file(keystorePath).exists()
 
 android {
